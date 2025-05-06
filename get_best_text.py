@@ -1,6 +1,16 @@
 import open_clip
 import torch
 from PIL import Image
+import argparse
+import os
+
+# Add command-line argument parsing
+parser = argparse.ArgumentParser(description='Find the best text prompt matching an image using CLIP similarity')
+parser.add_argument('--prompt_file', type=str, required=True, help='Path to file containing candidate prompts')
+parser.add_argument('--image_path', type=str, required=True, help='Path to the reference image')
+parser.add_argument('--output_dir', type=str, required=True, help='Directory to save output image and results')
+parser.add_argument('--output_image_id', type=str, required=True, help='Name of the output image')
+args = parser.parse_args()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 clip_model, _, clip_preprocess = open_clip.create_model_and_transforms("ViT-L-14", pretrained="openai", device=device)
@@ -29,11 +39,13 @@ pipe = StableDiffusionPipeline.from_pretrained(
 pipe = pipe.to(device)
 image_length = 512
 
+# Ensure output directory exists
+os.makedirs(args.output_dir, exist_ok=True)
+
 best_loss=0.
 step =0
-image_path = './ldm/data/image.png'
-orig_image = Image.open(image_path).convert('RGB')
-with open('./logs_forward_pass/prompt_file.txt','r') as textfile:
+orig_image = Image.open(args.image_path).convert('RGB')
+with open(args.prompt_file, 'r') as textfile:
     prompt = textfile.readlines()
     for prompt_l in prompt:
         step=step+1
@@ -58,7 +70,13 @@ with open('./logs_forward_pass/prompt_file.txt','r') as textfile:
                     best_loss = eval_loss
                     best_text = prompt_l
                     best_pred = pred_imgs[0]
-best_pred.save('./logs/pred_image.png')
+
+output_image_path = os.path.join(args.output_dir, args.output_image_id+'.png')
+best_pred.save(output_image_path)
 print()
-print(f"Best shot: consine similarity: {best_loss:.3f}")
+print(f"Best shot: cosine similarity: {best_loss:.3f}")
 print(f"text: {best_text}")
+best_text_file = os.path.join(args.output_dir, args.output_image_id+'.txt')
+with open(best_text_file, 'w') as f:
+    f.write(best_text)
+print(f"Saved best image to: {output_image_path}")

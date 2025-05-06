@@ -18,7 +18,7 @@ model:
     scale_factor: 0.18215
     use_ema: False
     #model_lr: 10.0
-
+  
     scheduler_config: # 10000 warmup steps
       target: ldm.lr_scheduler.LambdaLinearScheduler
       params:
@@ -79,10 +79,11 @@ data:
     train:
       target: ldm.data.imageloader.CustomTrain
       params:
-        image_path: "./ldm/data/image.png"
+        image_path: "./ldm/data/squirrel.png"
 
 lightning:
   trainer:
     benchmark: True
-    max_steps: 500
+    max_steps: 100
     accumulate_grad_batches: 3
+    gpus: 0,

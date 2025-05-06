@@ -134,6 +134,14 @@ def get_parser(**parser_kwargs):
         default=True,
         help="optimize for textual embeddings",
     )
+    parser.add_argument(
+        "--prompt_file_path",
+        type=str,
+        const=True,
+        default="logs_forward_pass/prompt_file.txt",
+        nargs="?",
+        help="Path to save the generated prompt file",
+    )
 
     return parser
 
@@ -573,6 +581,7 @@ if __name__ == "__main__":
 
     try:
         # init and save configs
+        #import pdb; pdb.set_trace()
         configs = [OmegaConf.load(cfg) for cfg in opt.base]
         cli = OmegaConf.from_dotlist(unknown)
         config = OmegaConf.merge(*configs, cli)
@@ -595,12 +604,37 @@ if __name__ == "__main__":
         config.model.params.image_id = opt.image_id
 
         # model
-        if not True:
-            model = instantiate_from_config(config.model)
-            #resuming from checkpoint
-        else:
-            model = load_model_from_config(config, './models/ldm/stable-diffusion-v1/model.ckpt', verbose=False)#
+        ckpt_path = opt.resume_from_checkpoint if opt.resume else './models/ldm/stable-diffusion-v1/model.ckpt'
+        model = load_model_from_config(config, ckpt_path, verbose=False)
 
+        # Read the subject hint from the config object
+        # Use OmegaConf.select for safe access, defaulting to None if keys are missing
+        hint_from_config = OmegaConf.select(config, "model.params.subject_hint", default=None)
+
+        if hint_from_config is not None:
+            if hasattr(model, 'subject_hint'):
+                model.subject_hint = hint_from_config
+                print(f"Using subject hint from config: '{model.subject_hint}'")
+            else:
+                print(f"Warning: Model of type {type(model).__name__} does not have a 'subject_hint' attribute. Cannot set subject hint from config.")
+        else:
+            # Ensure the attribute exists even if None, for consistent checking within the model
+            model.subject_hint = None
+
+        # After the model is initialized or loaded, add:
+        if hasattr(opt, 'prompt_file_path') and opt.prompt_file_path:
+            if not hasattr(model, 'prompt_file_path'):
+                model.prompt_file_path = opt.prompt_file_path
+            else:
+                print(f"Setting custom prompt file path: {opt.prompt_file_path}")
+                model.prompt_file_path = opt.prompt_file_path
+            
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(model.prompt_file_path), exist_ok=True)
+            
+            # Clear the prompt file if it exists
+            if os.path.exists(model.prompt_file_path):
+                open(model.prompt_file_path, 'w').close()
 
         # trainer and callbacks
         trainer_kwargs = dict()
@@ -727,7 +761,7 @@ if __name__ == "__main__":
         trainer_kwargs["callbacks"] = [instantiate_from_config(callbacks_cfg[k]) for k in callbacks_cfg]
         trainer_kwargs["log_every_n_steps"]=1'''
 
-        trainer = Trainer.from_argparse_args(trainer_opt,checkpoint_callback=False, logger=False, **trainer_kwargs)
+        trainer = Trainer.from_argparse_args(trainer_opt,checkpoint_callback=False, logger=True, **trainer_kwargs)
         trainer.logdir = logdir  ###
 
         #config.data.params.train.params.image_path = opt.image_id
@@ -800,7 +834,7 @@ if __name__ == "__main__":
     except Exception:
         if opt.debug and trainer.global_rank == 0:
             try:
-                import pudb as debugger
+                import pdb as debugger
             except ImportError:
                 import pdb as debugger
             debugger.post_mortem()

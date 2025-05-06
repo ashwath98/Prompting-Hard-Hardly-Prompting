@@ -29,7 +29,11 @@ For running the prompt inversion specify image path in inversion_config.json
  ```
 		python main_textual_inversion.py
  ```
-The prompts will be saved in ```./logs_forward_pass/```.
+ Optionally, you can provide a subject hint to guide the inversion:
+ ```
+                python main_textual_inversion.py --subject "your subject here"
+ ```
+ The prompts will be saved in ```./logs_forward_pass/```.
 
 The best prompt for a given image is obtained from the maximum clip similarity between the target image and the generated image for a prompt.
 This additionally requires ```transformers 4.25.1``` and ```diffusers 0.12.1```
